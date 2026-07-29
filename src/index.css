@@ -404,3 +404,163 @@ body::before {
 .tab.active::after {
   width: 100%;
 }
+
+/* Dashboard & Responsive Enhancements */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dashboard-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.8rem;
+}
+
+.dashboard-tabs-container {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px;
+  border-radius: 16px;
+  border: 1px solid var(--glass-border);
+}
+
+.dashboard-tab-btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 24px;
+}
+
+.leaderboard-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.leaderboard-row {
+  padding: 24px 32px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  transition: all 0.3s ease;
+}
+
+.rank-badge {
+  font-size: 2.5rem;
+  font-weight: 900;
+  width: 60px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.score-display {
+  font-size: 3rem;
+  font-weight: bold;
+  font-family: monospace;
+  flex-shrink: 0;
+}
+
+.admin-responsive-box {
+  background: rgba(74, 158, 255, 0.1);
+  border: 1px solid #4a9eff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-danger-box {
+  background: rgba(231, 0, 18, 0.1);
+  border: 1px solid var(--primary);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .dashboard-title {
+    justify-content: center;
+    font-size: 1.4rem;
+  }
+
+  .dashboard-tabs-container {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .dashboard-tab-btn {
+    flex: 1;
+    padding: 10px 6px;
+    font-size: 0.85rem;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .teams-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .leaderboard-row {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .rank-badge {
+    font-size: 1.8rem;
+    width: 36px;
+  }
+
+  .score-display {
+    font-size: 2rem;
+  }
+
+  .admin-responsive-box, .admin-danger-box {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .admin-responsive-box button, .admin-danger-box button {
+    width: 100%;
+  }
+}

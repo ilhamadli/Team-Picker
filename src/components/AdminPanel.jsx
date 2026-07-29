@@ -136,7 +136,7 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand }) => {
         </button>
       </div>
 
-      <div style={{ background: 'rgba(74, 158, 255, 0.1)', border: '1px solid #4a9eff', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="admin-responsive-box">
         <div>
           <h3 style={{ color: '#4a9eff', margin: '0 0 4px 0' }}>Export Tournament Data</h3>
           <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>Download current and historical employee records into an Excel file (.xlsx).</p>
@@ -151,7 +151,7 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand }) => {
         </button>
       </div>
 
-      <div style={{ background: 'rgba(231, 0, 18, 0.1)', border: '1px solid var(--primary)', borderRadius: '12px', padding: '20px', marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="admin-danger-box">
         <div>
           <h3 style={{ color: '#ff4444', margin: '0 0 4px 0' }}>Reset & Archive Session</h3>
           <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>Archive current active session to Supabase DB and start a fresh tournament session.</p>

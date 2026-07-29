@@ -18,43 +18,33 @@ const Dashboard = ({ teams = [] }) => {
 
   return (
     <div className="glass-panel" style={{ padding: '32px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-        <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="dashboard-header">
+        <h2 className="dashboard-title">
           <Trophy className="text-gradient" size={28} /> 
           Tournament Dashboard
         </h2>
         
         {/* Dashboard Tabs */}
-        <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', padding: '6px', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+        <div className="dashboard-tabs-container">
           <button 
-            className="btn"
+            className="btn dashboard-tab-btn"
             style={{ 
-              padding: '10px 24px', 
               background: view === 'teams' ? 'var(--primary)' : 'transparent', 
-              color: view === 'teams' ? 'white' : 'var(--text-muted)',
-              border: 'none',
-              borderRadius: '12px',
-              fontWeight: '600',
-              transition: 'all 0.3s ease'
+              color: view === 'teams' ? 'white' : 'var(--text-muted)'
             }}
             onClick={() => setView('teams')}
           >
-            <Users size={18} style={{ marginRight: '8px' }} /> Teams Roster
+            <Users size={16} /> Teams Roster
           </button>
           <button 
-            className="btn"
+            className="btn dashboard-tab-btn"
             style={{ 
-              padding: '10px 24px', 
               background: view === 'leaderboard' ? 'var(--primary)' : 'transparent', 
-              color: view === 'leaderboard' ? 'white' : 'var(--text-muted)',
-              border: 'none',
-              borderRadius: '12px',
-              fontWeight: '600',
-              transition: 'all 0.3s ease'
+              color: view === 'leaderboard' ? 'white' : 'var(--text-muted)'
             }}
             onClick={() => setView('leaderboard')}
           >
-            <Trophy size={18} style={{ marginRight: '8px' }} /> Team Scores
+            <Trophy size={16} /> Team Scores
           </button>
         </div>
       </div>
@@ -67,7 +57,7 @@ const Dashboard = ({ teams = [] }) => {
             <p>Teams will appear here as soon as employees start joining!</p>
           </div>
         ) : view === 'teams' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
+          <div className="teams-grid">
             {teams.map((team, index) => (
               <div 
                 key={team.id} 
@@ -104,44 +94,36 @@ const Dashboard = ({ teams = [] }) => {
             ))}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '800px', margin: '0 auto' }}>
+          <div className="leaderboard-container">
             {sortedTeams.map((team, index) => (
               <div 
                 key={team.id}
-                className="glass-panel"
+                className="glass-panel leaderboard-row"
                 style={{ 
-                  padding: '24px 32px', 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  gap: '24px',
                   border: index === 0 ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
                   background: index === 0 ? 'linear-gradient(90deg, rgba(231,0,18,0.1) 0%, rgba(255,255,255,0.02) 100%)' : 'var(--glass-bg)',
-                  boxShadow: index === 0 ? '0 8px 32px rgba(231,0,18,0.1)' : 'none',
-                  transition: 'all 0.3s ease'
+                  boxShadow: index === 0 ? '0 8px 32px rgba(231,0,18,0.1)' : 'none'
                 }}
               >
-                <div style={{ 
-                  fontSize: '2.5rem', 
-                  fontWeight: '900', 
-                  color: index === 0 ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
-                  width: '60px',
-                  textAlign: 'center',
-                  textShadow: index === 0 ? '0 0 20px rgba(231,0,18,0.4)' : 'none'
-                }}>
+                <div 
+                  className="rank-badge"
+                  style={{ 
+                    color: index === 0 ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
+                    textShadow: index === 0 ? '0 0 20px rgba(231,0,18,0.4)' : 'none'
+                  }}
+                >
                   #{index + 1}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.6rem', color: index === 0 ? 'white' : 'var(--text-muted)' }}>{team.name}</h3>
-                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.4rem', color: index === 0 ? 'white' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team.name}</h3>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     {team.members.length} members
                   </p>
                 </div>
-                <div style={{ 
-                  fontSize: '3rem', 
-                  fontWeight: 'bold',
-                  color: index === 0 ? 'white' : 'var(--text-muted)',
-                  fontFamily: 'monospace'
-                }}>
+                <div 
+                  className="score-display"
+                  style={{ color: index === 0 ? 'white' : 'var(--text-muted)' }}
+                >
                   {team.score}
                 </div>
               </div>
