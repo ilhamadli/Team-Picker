@@ -6,10 +6,13 @@ import AdminPanel from './components/AdminPanel';
 import { supabase } from './supabaseClient';
 import { assignToTeam } from './utils/teamBalancer';
 import { 
-  getOrCreateActiveTournament, 
-  fetchParticipantsForTournament, 
+  getOrCreateActiveSession, 
+  fetchParticipantsForSession, 
+  fetchGameScoresForSession,
   saveParticipantToDb, 
-  archiveCurrentTournamentSession 
+  updateParticipantInDb,
+  saveGameScoresToDb,
+  archiveCurrentSession 
 } from './utils/dbHelper';
 
 function App() {
@@ -21,29 +24,45 @@ function App() {
   const [teams, setTeams] = useState([]);
   const [isRandomizerFinished, setIsRandomizerFinished] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [activeTournament, setActiveTournament] = useState(null);
-  const activeTournamentRef = useRef(null);
+  const [activeSession, setActiveSession] = useState(null);
+  const activeSessionRef = useRef(null);
   const channelRef = useRef(null);
 
   useEffect(() => {
-    activeTournamentRef.current = activeTournament;
-  }, [activeTournament]);
+    activeSessionRef.current = activeSession;
+  }, [activeSession]);
 
-  // Load Active Tournament & DB Participants on Mount
+  // Load Active Session, Participants & Game Scores on Mount
   useEffect(() => {
     let isSubscribed = true;
-    getOrCreateActiveTournament().then(async (t) => {
-      if (!isSubscribed || !t) return;
-      setActiveTournament(t);
-      const dbParticipants = await fetchParticipantsForTournament(t.id);
-      if (dbParticipants && dbParticipants.length > 0) {
-        let reconstructedTeams = Array.from({ length: 8 }, (_, i) => ({
-          id: i + 1,
-          name: `Team ${i + 1}`,
-          score: 0,
-          members: []
-        }));
-        dbParticipants.forEach(p => {
+    getOrCreateActiveSession().then(async (session) => {
+      if (!isSubscribed || !session) return;
+      setActiveSession(session);
+
+      const dbParticipants = await fetchParticipantsForSession(session.id);
+      const dbGameScores = await fetchGameScoresForSession(session.id);
+
+      // Calculate cumulative team scores from game score history
+      const teamScoresMap = {};
+      (dbGameScores || []).forEach(gs => {
+        teamScoresMap[gs.team_id] = (teamScoresMap[gs.team_id] || 0) + (gs.points_awarded || 0);
+      });
+
+      setTeams(prevTeams => {
+        let reconstructedTeams = Array.from({ length: 8 }, (_, i) => {
+          const tId = i + 1;
+          const existingTeam = prevTeams.find(item => item.id === tId);
+          // Prefer DB cumulative score if present, else fall back to local state
+          const calculatedScore = teamScoresMap[tId] !== undefined ? teamScoresMap[tId] : (existingTeam ? (existingTeam.score || 0) : 0);
+          return {
+            id: tId,
+            name: `Team ${tId}`,
+            score: calculatedScore,
+            members: []
+          };
+        });
+
+        (dbParticipants || []).forEach(p => {
           const tId = p.team_id || 1;
           const targetTeam = reconstructedTeams.find(item => item.id === tId);
           if (targetTeam) {
@@ -54,9 +73,10 @@ function App() {
             });
           }
         });
-        setTeams(reconstructedTeams);
+
         localStorage.setItem('tournament_teams', JSON.stringify(reconstructedTeams));
-      }
+        return reconstructedTeams;
+      });
     });
     return () => { isSubscribed = false; };
   }, []);
@@ -132,6 +152,11 @@ function App() {
           setTeams(prevTeams => prevTeams.map(t => 
             t.id === payload.teamId ? { ...t, score: t.score + payload.points } : t
           ));
+        } else if (payload.action === 'RECORD_GAME_SCORES') {
+          setTeams(prevTeams => prevTeams.map(t => ({
+            ...t,
+            score: (t.score || 0) + (payload.scoreUpdates[t.id] || 0)
+          })));
         } else if (payload.action === 'EDIT_MEMBER') {
           setTeams(prevTeams => {
             if (!payload.newTeamId || payload.newTeamId === payload.teamId) {
@@ -228,8 +253,8 @@ function App() {
     const { assignedTeamId: computedTeamId } = assignToTeam(payload.name, payload.gender, teams, payload.clientId, payload.forceTeamId);
     const targetTeamId = finalTeamId || computedTeamId || 1;
 
-    if (activeTournamentRef.current) {
-      saveParticipantToDb(activeTournamentRef.current.id, {
+    if (activeSessionRef.current) {
+      saveParticipantToDb(activeSessionRef.current.id, {
         name: payload.name,
         gender: payload.gender,
         teamId: targetTeamId,
@@ -250,9 +275,9 @@ function App() {
   const sendCommand = async (payload) => {
     if (isLeader) {
       if (payload.action === 'CLEAR_DATA') {
-        if (activeTournamentRef.current) {
-          const newSession = await archiveCurrentTournamentSession(activeTournamentRef.current.id);
-          if (newSession) setActiveTournament(newSession);
+        if (activeSessionRef.current) {
+          const newSession = await archiveCurrentSession(activeSessionRef.current.id);
+          if (newSession) setActiveSession(newSession);
         }
         setTeams([]);
         setIsRandomizerFinished(false);
@@ -264,7 +289,18 @@ function App() {
         setTeams(prevTeams => prevTeams.map(t => 
           t.id === payload.teamId ? { ...t, score: t.score + payload.points } : t
         ));
+      } else if (payload.action === 'RECORD_GAME_SCORES') {
+        if (activeSessionRef.current) {
+          saveGameScoresToDb(activeSessionRef.current.id, payload.gameTitle, payload.scoreUpdates);
+        }
+        setTeams(prevTeams => prevTeams.map(t => ({
+          ...t,
+          score: (t.score || 0) + (payload.scoreUpdates[t.id] || 0)
+        })));
       } else if (payload.action === 'EDIT_MEMBER') {
+        if (activeSessionRef.current) {
+          updateParticipantInDb(activeSessionRef.current.id, payload);
+        }
         setTeams(prevTeams => {
           if (!payload.newTeamId || payload.newTeamId === payload.teamId) {
             return prevTeams.map(t => {
