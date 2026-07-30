@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Users, Trophy } from 'lucide-react';
 import autoAnimate from '@formkit/auto-animate';
+import { HERO_TEAM_NAMES } from '../utils/teamBalancer';
 
 const Dashboard = ({ teams = [] }) => {
   const [view, setView] = useState('teams'); // 'teams', 'leaderboard'
@@ -59,45 +60,46 @@ const Dashboard = ({ teams = [] }) => {
           </div>
         ) : view === 'teams' ? (
           <div className="teams-grid">
-            {teams.map((team, index) => (
-              <div 
-                key={team.id} 
-                className="glass-panel animate-reveal"
-                style={{ padding: '24px', animationDelay: `${index * 0.05}s`, background: 'rgba(255,255,255,0.02)' }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <h3 style={{ margin: 0, color: 'var(--primary)', fontSize: '1.4rem' }}>{team.name}</h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ background: 'rgba(231, 0, 18, 0.2)', border: '1px solid var(--primary)', color: '#ff4d5a', padding: '3px 10px', borderRadius: '12px', fontWeight: 'bold', fontSize: '0.85rem' }}>
+            {teams.map((team, index) => {
+              const displayName = HERO_TEAM_NAMES[team.id - 1] || team.name;
+              return (
+                <div 
+                  key={team.id} 
+                  className="team-card animate-reveal"
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                >
+                  <div className="team-card-header">
+                    <h3 className="team-card-title" title={displayName}>{displayName}</h3>
+                  <div className="team-card-badges">
+                    <span className="team-score-badge">
                       {team.score || 0} pts
                     </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      <Users size={14} /> {team.members.length} / 10
+                    <span className="team-count-badge">
+                      <Users size={15} /> {team.members.length} / 10
                     </span>
                   </div>
                 </div>
                 
                 {team.members.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic', textAlign: 'center', padding: '20px 0' }}>Empty team</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '1.05rem', fontStyle: 'italic', textAlign: 'center', margin: 'auto 0', padding: '24px 0' }}>Empty team</p>
                 ) : (
-                  <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                  <ul className="team-members-list">
                     {team.members.map((member, idx) => (
-                      <li key={idx} className="animate-fade-in" style={{ 
-                        padding: '10px 0', 
-                        borderBottom: idx !== team.members.length - 1 ? '1px solid rgba(255,255,255,0.02)' : 'none',
-                        fontSize: '1rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px'
-                      }}>
-                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: member.gender === 'Male' ? '#4dabf7' : '#ff8787' }} />
-                        {member.name || member.input} 
+                      <li key={idx} className="team-member-item animate-fade-in">
+                        <div 
+                          className="team-member-dot" 
+                          style={{ background: member.gender === 'Male' ? '#4dabf7' : '#ff8787' }} 
+                        />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {member.name || member.input}
+                        </span>
                       </li>
                     ))}
                   </ul>
                 )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="vertical-leaderboard-card">
@@ -134,8 +136,8 @@ const Dashboard = ({ teams = [] }) => {
 
                     {/* Bottom Team Info */}
                     <div className="bar-team-info">
-                      <div className={`bar-team-name ${isLeader ? 'leader' : ''}`} title={team.name}>
-                        {team.name}
+                      <div className={`bar-team-name ${isLeader ? 'leader' : ''}`} title={HERO_TEAM_NAMES[team.id - 1] || team.name}>
+                        {HERO_TEAM_NAMES[team.id - 1] || team.name}
                       </div>
                       <div className={`bar-rank-badge ${isLeader ? 'leader' : ''}`}>
                         {descRank === 1 ? '🥇 1st' : descRank === 2 ? '🥈 2nd' : descRank === 3 ? '🥉 3rd' : `#${descRank}`}

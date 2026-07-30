@@ -4,7 +4,7 @@ import TeamPicker from './components/TeamPicker';
 import Dashboard from './components/Dashboard';
 import AdminPanel from './components/AdminPanel';
 import { supabase } from './supabaseClient';
-import { assignToTeam } from './utils/teamBalancer';
+import { assignToTeam, HERO_TEAM_NAMES } from './utils/teamBalancer';
 import { 
   getOrCreateActiveSession, 
   fetchParticipantsForSession, 
@@ -12,6 +12,8 @@ import {
   saveParticipantToDb, 
   updateParticipantInDb,
   saveGameScoresToDb,
+  deleteGameScoreInDb,
+  updateGameScoreInDb,
   archiveCurrentSession 
 } from './utils/dbHelper';
 
@@ -49,30 +51,38 @@ function App() {
       });
 
       setTeams(prevTeams => {
+        const hasDbData = (dbParticipants && dbParticipants.length > 0) || (dbGameScores && dbGameScores.length > 0);
+
         let reconstructedTeams = Array.from({ length: 8 }, (_, i) => {
           const tId = i + 1;
           const existingTeam = prevTeams.find(item => item.id === tId);
-          // Prefer DB cumulative score if present, else fall back to local state
-          const calculatedScore = teamScoresMap[tId] !== undefined ? teamScoresMap[tId] : (existingTeam ? (existingTeam.score || 0) : 0);
+
+          let calculatedScore = 0;
+          if (hasDbData) {
+            calculatedScore = teamScoresMap[tId] !== undefined ? teamScoresMap[tId] : (existingTeam ? (existingTeam.score || 0) : 0);
+          }
+
           return {
             id: tId,
-            name: `Team ${tId}`,
+            name: HERO_TEAM_NAMES[i] || `Team ${tId}`,
             score: calculatedScore,
             members: []
           };
         });
 
-        (dbParticipants || []).forEach(p => {
-          const tId = p.team_id || 1;
-          const targetTeam = reconstructedTeams.find(item => item.id === tId);
-          if (targetTeam) {
-            targetTeam.members.push({
-              name: p.name,
-              gender: p.gender,
-              clientId: p.client_id || Math.random().toString(36).substr(2, 9)
-            });
-          }
-        });
+        if (hasDbData) {
+          (dbParticipants || []).forEach(p => {
+            const tId = p.team_id || 1;
+            const targetTeam = reconstructedTeams.find(item => item.id === tId);
+            if (targetTeam) {
+              targetTeam.members.push({
+                name: p.name,
+                gender: p.gender,
+                clientId: p.client_id || Math.random().toString(36).substr(2, 9)
+              });
+            }
+          });
+        }
 
         localStorage.setItem('tournament_teams', JSON.stringify(reconstructedTeams));
         return reconstructedTeams;
@@ -106,27 +116,115 @@ function App() {
     isLeaderRef.current = isLeader;
   }, [isLeader]);
 
+  const teamsRef = useRef(teams);
+  useEffect(() => {
+    teamsRef.current = teams;
+  }, [teams]);
+
+  const isRandomizerFinishedRef = useRef(isRandomizerFinished);
+  useEffect(() => {
+    isRandomizerFinishedRef.current = isRandomizerFinished;
+  }, [isRandomizerFinished]);
+
+  // Load Active Session, Participants & Game Scores on Mount
+  useEffect(() => {
+    let isSubscribed = true;
+    getOrCreateActiveSession().then(async (session) => {
+      if (!isSubscribed || !session) return;
+      setActiveSession(session);
+
+      const dbParticipants = await fetchParticipantsForSession(session.id);
+      const dbGameScores = await fetchGameScoresForSession(session.id);
+
+      // Calculate cumulative team scores from game score history
+      const teamScoresMap = {};
+      (dbGameScores || []).forEach(gs => {
+        teamScoresMap[gs.team_id] = (teamScoresMap[gs.team_id] || 0) + (gs.points_awarded || 0);
+      });
+
+      setTeams(prevTeams => {
+        const savedLocal = localStorage.getItem('tournament_teams');
+        const localTeams = savedLocal ? JSON.parse(savedLocal) : [];
+
+        let reconstructedTeams = Array.from({ length: 8 }, (_, i) => {
+          const tId = i + 1;
+          const existingTeam = prevTeams.find(item => item.id === tId);
+          const localTeam = localTeams.find(item => item.id === tId);
+
+          const dbScore = teamScoresMap[tId] || 0;
+          const prevScore = existingTeam ? (existingTeam.score || 0) : 0;
+          const lScore = localTeam ? (localTeam.score || 0) : 0;
+
+          const finalScore = Math.max(dbScore, prevScore, lScore);
+
+          return {
+            id: tId,
+            name: `Team ${tId}`,
+            score: finalScore,
+            members: []
+          };
+        });
+
+        (dbParticipants || []).forEach(p => {
+          const tId = p.team_id || 1;
+          const targetTeam = reconstructedTeams.find(item => item.id === tId);
+          if (targetTeam) {
+            targetTeam.members.push({
+              name: p.name,
+              gender: p.gender,
+              clientId: p.client_id || Math.random().toString(36).substr(2, 9)
+            });
+          }
+        });
+
+        localStorage.setItem('tournament_teams', JSON.stringify(reconstructedTeams));
+        return reconstructedTeams;
+      });
+    });
+    return () => { isSubscribed = false; };
+  }, []);
+
+  const sanitizeTeams = (teamList) => {
+    if (!Array.isArray(teamList)) return [];
+    return teamList.map(t => ({
+      ...t,
+      name: HERO_TEAM_NAMES[t.id - 1] || t.name || `Team ${t.id}`
+    }));
+  };
+
   useEffect(() => {
     const channel = supabase.channel('tournament');
     channelRef.current = channel;
 
     const handleStorage = (e) => {
-      if (e.key === 'tournament_teams' && e.newValue) setTeams(JSON.parse(e.newValue));
+      if (e.key === 'tournament_teams' && e.newValue) setTeams(sanitizeTeams(JSON.parse(e.newValue)));
       if (e.key === 'tournament_status' && e.newValue) setIsRandomizerFinished(JSON.parse(e.newValue));
     };
 
     const savedTeams = localStorage.getItem('tournament_teams');
     const savedStatus = localStorage.getItem('tournament_status');
-    if (savedTeams) setTeams(JSON.parse(savedTeams));
+    if (savedTeams) setTeams(sanitizeTeams(JSON.parse(savedTeams)));
     if (savedStatus) setIsRandomizerFinished(JSON.parse(savedStatus));
     setIsLoaded(true);
     window.addEventListener('storage', handleStorage);
 
     channel
       .on('broadcast', { event: 'STATE_UPDATE' }, ({ payload }) => {
-        if (!isLeaderRef.current) {
-          setTeams(payload.teams);
-          setIsRandomizerFinished(payload.isRandomizerFinished);
+        if (!isLeaderRef.current && payload.teams) {
+          setTeams(prevTeams => {
+            return payload.teams.map(inTeam => {
+              const prev = prevTeams.find(t => t.id === inTeam.id);
+              const maxScore = Math.max(inTeam.score || 0, prev ? (prev.score || 0) : 0);
+              return { 
+                ...inTeam, 
+                name: HERO_TEAM_NAMES[inTeam.id - 1] || inTeam.name || `Team ${inTeam.id}`,
+                score: maxScore 
+              };
+            });
+          });
+          if (payload.isRandomizerFinished !== undefined) {
+            setIsRandomizerFinished(payload.isRandomizerFinished);
+          }
         }
       })
       .on('broadcast', { event: 'JOIN_REQUEST' }, ({ payload }) => {
@@ -201,14 +299,22 @@ function App() {
       })
       .on('broadcast', { event: 'SYNC_REQUEST' }, () => {
         if (!isLeaderRef.current) return;
-        setTeams(prev => [...prev]); // Trigger broadcast
+        channel.send({
+          type: 'broadcast',
+          event: 'STATE_UPDATE',
+          payload: { teams: teamsRef.current, isRandomizerFinished: isRandomizerFinishedRef.current }
+        }).catch(console.error);
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           if (!isLeaderRef.current) {
             channel.send({ type: 'broadcast', event: 'SYNC_REQUEST' }).catch(console.error);
           } else {
-            setTeams(prev => [...prev]); // Initial broadcast
+            channel.send({
+              type: 'broadcast',
+              event: 'STATE_UPDATE',
+              payload: { teams: teamsRef.current, isRandomizerFinished: isRandomizerFinishedRef.current }
+            }).catch(console.error);
           }
         }
       });
@@ -221,11 +327,11 @@ function App() {
 
   // Host broadcast effect
   useEffect(() => {
-    if (isHost && isLoaded) {
+    if (isHost && isLoaded && isLeader) {
       localStorage.setItem('tournament_teams', JSON.stringify(teams));
       localStorage.setItem('tournament_status', JSON.stringify(isRandomizerFinished));
 
-      if (channelRef.current && isLeader) {
+      if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
           event: 'STATE_UPDATE',
@@ -275,14 +381,12 @@ function App() {
   const sendCommand = async (payload) => {
     if (isLeader) {
       if (payload.action === 'CLEAR_DATA') {
-        if (activeSessionRef.current) {
-          const newSession = await archiveCurrentSession(activeSessionRef.current.id);
-          if (newSession) setActiveSession(newSession);
-        }
+        const newSession = await archiveCurrentSession(activeSessionRef.current?.id);
+        if (newSession) setActiveSession(newSession);
         setTeams([]);
         setIsRandomizerFinished(false);
-        localStorage.removeItem('tournament_teams');
-        localStorage.removeItem('tournament_status');
+        localStorage.clear();
+        sessionStorage.clear();
       } else if (payload.action === 'TOGGLE_STATUS') {
         setIsRandomizerFinished(prev => !prev);
       } else if (payload.action === 'UPDATE_SCORE') {
@@ -340,6 +444,34 @@ function App() {
             return teamsAfterRemoval;
           }
         });
+      } else if (payload.action === 'DELETE_GAME_SCORE') {
+        if (activeSessionRef.current) {
+          await deleteGameScoreInDb(activeSessionRef.current.id, payload.gameTitle);
+          const dbGameScores = await fetchGameScoresForSession(activeSessionRef.current.id);
+          const teamScoresMap = {};
+          (dbGameScores || []).forEach(gs => {
+            teamScoresMap[gs.team_id] = (teamScoresMap[gs.team_id] || 0) + (gs.points_awarded || 0);
+          });
+          setTeams(prevTeams => prevTeams.map(t => ({
+            ...t,
+            name: HERO_TEAM_NAMES[t.id - 1] || t.name || `Team ${t.id}`,
+            score: teamScoresMap[t.id] || 0
+          })));
+        }
+      } else if (payload.action === 'EDIT_GAME_SCORE') {
+        if (activeSessionRef.current) {
+          await updateGameScoreInDb(activeSessionRef.current.id, payload.oldGameTitle, payload.newGameTitle, payload.scoreUpdates);
+          const dbGameScores = await fetchGameScoresForSession(activeSessionRef.current.id);
+          const teamScoresMap = {};
+          (dbGameScores || []).forEach(gs => {
+            teamScoresMap[gs.team_id] = (teamScoresMap[gs.team_id] || 0) + (gs.points_awarded || 0);
+          });
+          setTeams(prevTeams => prevTeams.map(t => ({
+            ...t,
+            name: HERO_TEAM_NAMES[t.id - 1] || t.name || `Team ${t.id}`,
+            score: teamScoresMap[t.id] || 0
+          })));
+        }
       }
     } else {
       if (channelRef.current) {
@@ -375,7 +507,7 @@ function App() {
         <Routes>
           <Route path="/" element={<TeamPicker teams={teams} sendJoinRequest={sendJoinRequest} />} />
           <Route path="/dashboard" element={<Dashboard teams={teams} />} />
-          <Route path="/admin" element={<AdminPanel teams={teams} isHost={isHost} sendCommand={sendCommand} />} />
+          <Route path="/admin" element={<AdminPanel teams={teams} isHost={isHost} sendCommand={sendCommand} activeSession={activeSession} />} />
         </Routes>
       </main>
     </div>

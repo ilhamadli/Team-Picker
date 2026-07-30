@@ -1,3 +1,16 @@
+export const HERO_TEAM_NAMES = [
+  'Pattimura',
+  'Diponegoro',
+  'Teuku Umar',
+  'Ngurah Rai',
+  'Imam Bonjol',
+  'Hasanuddin',
+  'Antasari',
+  'R.A Kartini',
+  'Bung Tomo',
+  'Soedirman'
+];
+
 export const assignToTeam = (name, gender, currentTeams, clientId = null, forceTeamId = null) => {
   let teams = [...currentTeams];
 
@@ -5,9 +18,14 @@ export const assignToTeam = (name, gender, currentTeams, clientId = null, forceT
   if (teams.length === 0) {
     teams = Array.from({ length: 8 }, (_, i) => ({
       id: i + 1,
-      name: `Team ${i + 1}`,
+      name: HERO_TEAM_NAMES[i] || `Team ${i + 1}`,
       score: 0,
       members: []
+    }));
+  } else {
+    teams = teams.map(t => ({
+      ...t,
+      name: HERO_TEAM_NAMES[t.id - 1] || t.name
     }));
   }
 
@@ -64,7 +82,7 @@ export const assignToTeam = (name, gender, currentTeams, clientId = null, forceT
     const newTeamId = teams.length + 1;
     const newTeam = {
       id: newTeamId,
-      name: `Team ${newTeamId}`,
+      name: HERO_TEAM_NAMES[newTeamId - 1] || `Team ${newTeamId}`,
       score: 0,
       members: []
     };

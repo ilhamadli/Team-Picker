@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
+import { HERO_TEAM_NAMES } from './teamBalancer';
 
 export const getOrCreateActiveSession = async () => {
   try {
@@ -19,8 +20,26 @@ export const getOrCreateActiveSession = async () => {
       return activeSessions[0];
     }
 
-    // Create default active session
-    const newName = `Session 1 - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    // Safely count all existing sessions to get the next sequential number (e.g. Session 5)
+    const { count } = await supabase
+      .from('tournament_sessions')
+      .select('*', { count: 'exact', head: true });
+
+    const nextNum = (count || 0) + 1;
+    const newName = `Session ${nextNum} - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+
+    // Double check if another tab created an active session in the last 2 seconds
+    const { data: doubleCheck } = await supabase
+      .from('tournament_sessions')
+      .select('*')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (doubleCheck && doubleCheck.length > 0) {
+      return doubleCheck[0];
+    }
+
     const { data: created, error: createErr } = await supabase
       .from('tournament_sessions')
       .insert([{ name: newName, status: 'active' }])
@@ -82,14 +101,16 @@ export const fetchGameScoresForSession = async (sessionId) => {
 export const saveParticipantToDb = async (sessionId, member) => {
   if (!sessionId) return null;
   try {
+    const tId = member.teamId;
+    const tName = HERO_TEAM_NAMES[tId - 1] || `Team ${tId}`;
     const { data, error } = await supabase
       .from('session_participants')
       .insert([{
         session_id: sessionId,
         name: member.name,
         gender: member.gender,
-        team_id: member.teamId,
-        team_name: `Team ${member.teamId}`,
+        team_id: tId,
+        team_name: tName,
         client_id: member.clientId
       }])
       .select()
@@ -108,13 +129,15 @@ export const saveParticipantToDb = async (sessionId, member) => {
 export const updateParticipantInDb = async (sessionId, payload) => {
   if (!sessionId) return null;
   try {
+    const tId = payload.newTeamId || payload.teamId;
+    const tName = HERO_TEAM_NAMES[tId - 1] || `Team ${tId}`;
     const { data, error } = await supabase
       .from('session_participants')
       .update({
         name: payload.newName,
         gender: payload.newGender,
-        team_id: payload.newTeamId || payload.teamId,
-        team_name: `Team ${payload.newTeamId || payload.teamId}`
+        team_id: tId,
+        team_name: tName
       })
       .eq('session_id', sessionId)
       .eq('name', payload.oldName);
@@ -132,7 +155,7 @@ export const updateParticipantInDb = async (sessionId, payload) => {
 export const saveGameScoresToDb = async (sessionId, gameName, scoreUpdates) => {
   if (!sessionId || !scoreUpdates) return null;
   try {
-    const RANK_POINTS_MAP = { 8: 1, 7: 2, 6: 3, 5: 4, 4: 5, 3: 6, 2: 7, 1: 8 };
+    const RANK_POINTS_MAP = { 25: 1, 18: 2, 15: 3, 12: 4, 10: 5, 8: 6, 5: 7, 3: 8 };
 
     const rowsToInsert = Object.entries(scoreUpdates).map(([teamIdStr, points]) => {
       const teamId = parseInt(teamIdStr);
@@ -140,7 +163,7 @@ export const saveGameScoresToDb = async (sessionId, gameName, scoreUpdates) => {
         session_id: sessionId,
         game_name: gameName || 'Game Round',
         team_id: teamId,
-        team_name: `Team ${teamId}`,
+        team_name: HERO_TEAM_NAMES[teamId - 1] || `Team ${teamId}`,
         rank: RANK_POINTS_MAP[points] || 8,
         points_awarded: points
       };
@@ -160,14 +183,48 @@ export const saveGameScoresToDb = async (sessionId, gameName, scoreUpdates) => {
   }
 };
 
+export const deleteGameScoreInDb = async (sessionId, gameName) => {
+  if (!sessionId || !gameName) return null;
+  try {
+    const { data, error } = await supabase
+      .from('session_game_scores')
+      .delete()
+      .eq('session_id', sessionId)
+      .eq('game_name', gameName);
+
+    if (error) {
+      console.warn("Failed to delete game score from DB:", error.message);
+    }
+    return data;
+  } catch (err) {
+    console.warn("Delete game score error:", err);
+    return null;
+  }
+};
+
+export const updateGameScoreInDb = async (sessionId, oldGameName, newGameTitle, newScoreUpdates) => {
+  if (!sessionId || !oldGameName || !newScoreUpdates) return null;
+  try {
+    await supabase
+      .from('session_game_scores')
+      .delete()
+      .eq('session_id', sessionId)
+      .eq('game_name', oldGameName);
+
+    return await saveGameScoresToDb(sessionId, newGameTitle || oldGameName, newScoreUpdates);
+  } catch (err) {
+    console.warn("Update game score error:", err);
+    return null;
+  }
+};
+
 export const archiveCurrentSession = async (currentSessionId) => {
   try {
-    if (currentSessionId) {
-      await supabase
-        .from('tournament_sessions')
-        .update({ status: 'archived', archived_at: new Date().toISOString() })
-        .eq('id', currentSessionId);
-    }
+    // Archive all active sessions in Supabase
+    await supabase
+      .from('tournament_sessions')
+      .update({ status: 'archived', archived_at: new Date().toISOString() })
+      .eq('status', 'active');
 
     const sessionCount = await getArchivedSessionCount();
     const newName = `Session ${sessionCount + 1} - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
