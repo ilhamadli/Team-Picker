@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { Settings, Trash2, X, Edit2, Save, Download, Trophy, Award, History, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { exportAllDataToExcel, fetchGameScoresForSession } from '../utils/dbHelper';
-import { HERO_TEAM_NAMES } from '../utils/teamBalancer';
+import { HERO_TEAM_NAMES, PREDEFINED_GAMES } from '../utils/teamBalancer';
 
 const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) => {
   const [activeTab, setActiveTab] = useState('games'); // 'games', 'roster', 'settings'
   const [editingMember, setEditingMember] = useState(null); // { teamId, oldName, newName, newGender }
   const [isExporting, setIsExporting] = useState(false);
-  const [gameTitle, setGameTitle] = useState('Game 1');
+  const [gameTitle, setGameTitle] = useState(PREDEFINED_GAMES[0]);
   const [gameSuccessMsg, setGameSuccessMsg] = useState('');
   const [rankings, setRankings] = useState({
     1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: ''
@@ -28,6 +28,12 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
     { rank: 8, label: '8th Place', points: 3 }
   ];
 
+  const getTeamDisplayName = (team) => {
+    if (!team) return '';
+    const baseName = HERO_TEAM_NAMES[team.id - 1] || team.name || `Team ${team.id}`;
+    return `${baseName} (Team ${team.id})`;
+  };
+
   const getAvailableTeams = (currentRank) => {
     const chosenOtherTeamIds = Object.entries(rankings)
       .filter(([r, val]) => parseInt(r) !== currentRank && val !== '')
@@ -38,6 +44,16 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
 
   const handleRankChange = (rank, teamIdStr) => {
     setRankings(prev => ({ ...prev, [rank]: teamIdStr }));
+  };
+
+  const handleSelectGame = (selectedTitle, gamesList = recordedGames) => {
+    setGameTitle(selectedTitle);
+    const existing = gamesList.find(g => g.gameTitle === selectedTitle);
+    if (existing) {
+      setRankings({ ...existing.rankings });
+    } else {
+      setRankings({ 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' });
+    }
   };
 
   const submitGameStandings = (e) => {
@@ -60,14 +76,22 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
       if (tId) scoreUpdates[tId] = points;
     });
 
-    sendCommand({ action: 'RECORD_GAME_SCORES', scoreUpdates, gameTitle });
+    const isAlreadyRecorded = recordedGames.some(g => g.gameTitle === gameTitle);
 
-    setGameSuccessMsg(`Success! Awarded points for ${gameTitle}.`);
+    if (isAlreadyRecorded) {
+      sendCommand({
+        action: 'EDIT_GAME_SCORE',
+        oldGameTitle: gameTitle,
+        newGameTitle: gameTitle,
+        scoreUpdates
+      });
+      setGameSuccessMsg(`Success! Updated standings for ${gameTitle}.`);
+    } else {
+      sendCommand({ action: 'RECORD_GAME_SCORES', scoreUpdates, gameTitle });
+      setGameSuccessMsg(`Success! Awarded points for ${gameTitle}.`);
+    }
+
     setTimeout(() => setGameSuccessMsg(''), 4000);
-
-    // Reset form to blank defaults
-    setRankings({ 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' });
-    setGameTitle('Game 1');
     setTimeout(loadRecordedGames, 600);
   };
 
@@ -95,7 +119,14 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
       gamesMap[gName].rankings[item.rank] = item.team_id;
     });
 
-    setRecordedGames(Object.values(gamesMap));
+    const list = Object.values(gamesMap);
+    setRecordedGames(list);
+
+    // Keep active rankings updated if currently viewing a recorded game
+    const currentRecorded = list.find(g => g.gameTitle === gameTitle);
+    if (currentRecorded) {
+      setRankings({ ...currentRecorded.rankings });
+    }
   };
 
   useEffect(() => {
@@ -105,6 +136,9 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
   const handleDeleteRecordedGame = (gTitle) => {
     if (window.confirm(`Are you sure you want to delete "${gTitle}" from this session? Total team scores will be updated.`)) {
       sendCommand({ action: 'DELETE_GAME_SCORE', gameTitle: gTitle });
+      if (gameTitle === gTitle) {
+        setRankings({ 1: '', 2: '', 3: '', 4: '', 5: '', 6: '', 7: '', 8: '' });
+      }
       setTimeout(loadRecordedGames, 600);
     }
   };
@@ -289,12 +323,24 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
         <>
           {/* Game Results Standings Panel */}
           <div className="game-results-panel">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <Trophy className="text-gradient" size={24} />
-              <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Record Game Results (8-Team Scoring)</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Trophy className="text-gradient" size={24} />
+                <h3 style={{ margin: 0, fontSize: '1.3rem' }}>Record Game Results</h3>
+              </div>
+              {recordedGames.some(g => g.gameTitle === gameTitle) ? (
+                <span style={{ background: 'rgba(74, 222, 128, 0.15)', border: '1px solid #4ade80', color: '#4ade80', padding: '4px 12px', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '600' }}>
+                  ✓ Recorded for {gameTitle}
+                </span>
+              ) : (
+                <span style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', color: 'var(--text-muted)', padding: '4px 12px', borderRadius: '12px', fontSize: '0.85rem' }}>
+                  ⏳ Pending Standings
+                </span>
+              )}
             </div>
+
             <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-              Assign finishing position for all 8 teams. Points (+25, 18, 15, 12, 10, 8, 5, 3) will be calculated automatically.
+              Select one of the 5 predefined games and assign finishing positions for all 8 teams. Points (+25, 18, 15, 12, 10, 8, 5, 3) will be awarded automatically.
             </p>
 
             {gameSuccessMsg && (
@@ -304,16 +350,20 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
             )}
 
             <form onSubmit={submitGameStandings}>
-              <div style={{ marginBottom: '20px', maxWidth: '300px' }}>
-                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Game / Round Name</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
+              <div style={{ marginBottom: '24px', maxWidth: '400px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: '600' }}>Select Predefined Game</label>
+                <select 
+                  className="select-dropdown" 
                   value={gameTitle} 
-                  onChange={(e) => setGameTitle(e.target.value)} 
-                  placeholder="e.g. Game 1, Tug of War..." 
-                  style={{ padding: '10px 14px', fontSize: '0.95rem' }}
-                />
+                  onChange={(e) => handleSelectGame(e.target.value)} 
+                  style={{ padding: '10px 14px', fontSize: '1rem', fontWeight: '600' }}
+                >
+                  {PREDEFINED_GAMES.map((g, idx) => (
+                    <option key={g} value={g}>
+                      {idx + 1}. {g} {recordedGames.some(rg => rg.gameTitle === g) ? ' (Recorded)' : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="rank-grid">
@@ -326,100 +376,159 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
                     <select 
                       className="select-dropdown" 
                       style={{ padding: '8px 28px 8px 12px', fontSize: '0.9rem' }}
-                      value={rankings[rank]}
+                      value={rankings[rank] || ''}
                       onChange={(e) => handleRankChange(rank, e.target.value)}
                     >
                       <option value="">Select Team...</option>
                       {getAvailableTeams(rank).map(t => (
-                        <option key={`opt-${rank}-${t.id}`} value={t.id}>{HERO_TEAM_NAMES[t.id - 1] || t.name}</option>
+                        <option key={`opt-${rank}-${t.id}`} value={t.id}>{getTeamDisplayName(t)}</option>
                       ))}
                     </select>
                   </div>
                 ))}
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
-                <Award size={18} /> Submit Game Standings & Award Points
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '16px' }}>
+                <Award size={18} /> {recordedGames.some(g => g.gameTitle === gameTitle) ? `Update Standings for ${gameTitle}` : `Submit Standings for ${gameTitle}`}
               </button>
             </form>
           </div>
 
-          {/* Recorded Games History (Current Session Only) */}
+          {/* Predefined 5-Game Status Overview & History */}
           <div className="glass-panel" style={{ padding: '24px', marginTop: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
               <History className="text-gradient" size={24} />
-              <h3 style={{ margin: 0, fontSize: '1.4rem' }}>Recorded Games History (Active Session)</h3>
+              <h3 style={{ margin: 0, fontSize: '1.4rem' }}>Tournament 5-Game Status & History</h3>
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
-              Manage previously recorded game points for the current active session. Editing or deleting a game will recalculate live team totals.
+              Status and recorded standings for all 5 tournament games in this active session. Click "Edit Standings" to modify any game.
             </p>
 
-            {recordedGames.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', background: 'rgba(255,255,255,0.02)', borderRadius: '12px' }}>
-                No games recorded for this session yet.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {recordedGames.map((game, idx) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {PREDEFINED_GAMES.map((gName, idx) => {
+                const recorded = recordedGames.find(g => g.gameTitle === gName);
+                const isSelected = gameTitle === gName;
+
+                return (
                   <div 
-                    key={idx} 
+                    key={gName} 
                     className="glass-panel" 
-                    style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '14px' }}
+                    style={{ 
+                      padding: '18px 20px', 
+                      background: isSelected ? 'rgba(231, 0, 18, 0.08)' : 'rgba(255,255,255,0.02)', 
+                      border: isSelected ? '1px solid var(--primary)' : '1px solid rgba(255,255,255,0.06)', 
+                      borderRadius: '14px',
+                      transition: 'all 0.2s ease'
+                    }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: recorded ? '12px' : '0', flexWrap: 'wrap', gap: '10px' }}>
                       <div>
-                        <h4 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', color: 'var(--primary)' }}>{game.gameTitle}</h4>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                          {game.created_at ? new Date(game.created_at).toLocaleString() : 'Recorded'}
+                        <h4 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', color: isSelected ? 'white' : 'var(--primary)' }}>
+                          Game {idx + 1}: {gName}
+                        </h4>
+                        <span style={{ fontSize: '0.85rem', color: recorded ? '#4ade80' : 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: '500' }}>
+                          {recorded ? `✓ Recorded (${recorded.created_at ? new Date(recorded.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Saved'})` : '⏳ Not Recorded Yet'}
                         </span>
                       </div>
+
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button 
                           className="btn" 
-                          style={{ padding: '6px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                          onClick={() => setEditingGame({
-                            oldGameTitle: game.gameTitle,
-                            gameTitle: game.gameTitle,
-                            rankings: { ...game.rankings }
-                          })}
+                          style={{ 
+                            padding: '6px 14px', 
+                            fontSize: '0.85rem', 
+                            background: isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.08)',
+                            color: 'white',
+                            border: 'none',
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '6px' 
+                          }}
+                          onClick={() => {
+                            handleSelectGame(gName);
+                            window.scrollTo({ top: 100, behavior: 'smooth' });
+                          }}
                         >
-                          <Edit2 size={14} /> Edit Game
+                          <Edit2 size={14} /> {recorded ? 'Edit Standings' : 'Enter Standings'}
                         </button>
-                        <button 
-                          className="btn" 
-                          style={{ padding: '6px 12px', fontSize: '0.85rem', color: '#ff4d5a', borderColor: 'rgba(231,0,18,0.3)', display: 'flex', alignItems: 'center', gap: '6px' }}
-                          onClick={() => handleDeleteRecordedGame(game.gameTitle)}
-                        >
-                          <Trash2 size={14} /> Delete
-                        </button>
+                        {recorded && (
+                          <button 
+                            className="btn" 
+                            style={{ padding: '6px 12px', fontSize: '0.85rem', color: '#ff4d5a', borderColor: 'rgba(231,0,18,0.3)', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            onClick={() => handleDeleteRecordedGame(gName)}
+                          >
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      {RANK_CONFIG.map(({ rank, points }) => {
-                        const tId = game.rankings[rank];
-                        const targetTeam = teams.find(t => t.id === tId);
-                        if (!targetTeam) return null;
-                        return (
-                          <span 
-                            key={rank} 
-                            style={{ 
-                              background: rank === 1 ? 'rgba(255, 77, 90, 0.2)' : 'rgba(255,255,255,0.04)', 
-                              border: rank === 1 ? '1px solid #ff4d5a' : '1px solid rgba(255,255,255,0.08)',
-                              padding: '4px 10px', 
-                              borderRadius: '8px', 
-                              fontSize: '0.85rem' 
-                            }}
-                          >
-                            <strong>#{rank}</strong> {HERO_TEAM_NAMES[targetTeam.id - 1] || targetTeam.name} <span style={{ opacity: 0.7 }}>({points} pts)</span>
-                          </span>
-                        );
-                      })}
-                    </div>
+                    {recorded && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+                        {RANK_CONFIG.map(({ rank, points }) => {
+                          const tId = recorded.rankings[rank];
+                          const targetTeam = teams.find(t => t.id === tId);
+                          if (!targetTeam) return null;
+                          return (
+                            <span 
+                              key={rank} 
+                              style={{ 
+                                background: rank === 1 ? 'rgba(255, 77, 90, 0.2)' : 'rgba(255,255,255,0.04)', 
+                                border: rank === 1 ? '1px solid #ff4d5a' : '1px solid rgba(255,255,255,0.08)',
+                                padding: '4px 10px', 
+                                borderRadius: '8px', 
+                                fontSize: '0.85rem' 
+                              }}
+                            >
+                              <strong>#{rank}</strong> {getTeamDisplayName(targetTeam)} <span style={{ opacity: 0.7 }}>({points} pts)</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+
+              {/* Legacy or Custom Games recorded */}
+              {recordedGames.filter(g => !PREDEFINED_GAMES.includes(g.gameTitle)).length > 0 && (
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'var(--text-muted)' }}>Other Recorded Games</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {recordedGames.filter(g => !PREDEFINED_GAMES.includes(g.gameTitle)).map((game, idx) => (
+                      <div 
+                        key={idx} 
+                        className="glass-panel" 
+                        style={{ padding: '14px 18px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px' }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--primary)' }}>{game.gameTitle}</h4>
+                          <button 
+                            className="btn" 
+                            style={{ padding: '4px 10px', fontSize: '0.8rem', color: '#ff4d5a', borderColor: 'rgba(231,0,18,0.3)', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            onClick={() => handleDeleteRecordedGame(game.gameTitle)}
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {RANK_CONFIG.map(({ rank, points }) => {
+                            const tId = game.rankings[rank];
+                            const targetTeam = teams.find(t => t.id === tId);
+                            if (!targetTeam) return null;
+                            return (
+                              <span key={rank} style={{ fontSize: '0.8rem', background: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: '6px' }}>
+                                <strong>#{rank}</strong> {getTeamDisplayName(targetTeam)} ({points} pts)
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}
@@ -435,7 +544,7 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
               {teams.map(team => (
                 <div key={`members-${team.id}`} style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h4 style={{ margin: 0, color: 'var(--primary)' }}>{HERO_TEAM_NAMES[team.id - 1] || team.name}</h4>
+                    <h4 style={{ margin: 0, color: 'var(--primary)' }}>{getTeamDisplayName(team)}</h4>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '12px' }}>
                       Male: <strong style={{ color: '#4a9eff' }}>{team.members.filter(m => m.gender === 'Male').length}</strong> &nbsp;|&nbsp; 
                       Female: <strong style={{ color: '#ff4a9e' }}>{team.members.filter(m => m.gender === 'Female').length}</strong>
@@ -479,7 +588,7 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
                                   onChange={(e) => setEditingMember({...editingMember, newTeamId: parseInt(e.target.value)})}
                                 >
                                   {teams.map(t => (
-                                    <option key={t.id} value={t.id}>{HERO_TEAM_NAMES[t.id - 1] || t.name}</option>
+                                    <option key={t.id} value={t.id}>{getTeamDisplayName(t)}</option>
                                   ))}
                                 </select>
                               </div>
@@ -616,7 +725,7 @@ const AdminPanel = ({ teams = [], isHost = false, sendCommand, activeSession }) 
                     >
                       <option value="">-- Select Team --</option>
                       {teams.map(t => (
-                        <option key={t.id} value={t.id}>{HERO_TEAM_NAMES[t.id - 1] || t.name}</option>
+                        <option key={t.id} value={t.id}>{getTeamDisplayName(t)}</option>
                       ))}
                     </select>
                   </div>

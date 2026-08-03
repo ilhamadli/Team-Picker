@@ -11,6 +11,14 @@ export const HERO_TEAM_NAMES = [
   'Soedirman'
 ];
 
+export const PREDEFINED_GAMES = [
+  'Bola Sumpit',
+  'Balap Kelereng & Makan Kerupuk',
+  'Bola Corong',
+  'Estafet Sarung',
+  'Kaos Kaki Ajaib'
+];
+
 export const assignToTeam = (name, gender, currentTeams, clientId = null, forceTeamId = null) => {
   let teams = [...currentTeams];
 

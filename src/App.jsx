@@ -24,6 +24,7 @@ function App() {
   const isHost = isDashboardOrAdmin || localStorage.getItem('is_host') === 'true';
   const [isLeader, setIsLeader] = useState(false);
   const [teams, setTeams] = useState([]);
+  const [gameScores, setGameScores] = useState([]);
   const [isRandomizerFinished, setIsRandomizerFinished] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeSession, setActiveSession] = useState(null);
@@ -43,6 +44,9 @@ function App() {
 
       const dbParticipants = await fetchParticipantsForSession(session.id);
       const dbGameScores = await fetchGameScoresForSession(session.id);
+      if (isSubscribed) {
+        setGameScores(dbGameScores || []);
+      }
 
       // Calculate cumulative team scores from game score history
       const teamScoresMap = {};
@@ -225,6 +229,9 @@ function App() {
           if (payload.isRandomizerFinished !== undefined) {
             setIsRandomizerFinished(payload.isRandomizerFinished);
           }
+          if (payload.gameScores) {
+            setGameScores(payload.gameScores);
+          }
         }
       })
       .on('broadcast', { event: 'JOIN_REQUEST' }, ({ payload }) => {
@@ -335,7 +342,7 @@ function App() {
         channelRef.current.send({
           type: 'broadcast',
           event: 'STATE_UPDATE',
-          payload: { teams, isRandomizerFinished }
+          payload: { teams, isRandomizerFinished, gameScores }
         }).catch(console.error);
       }
     }
@@ -395,7 +402,9 @@ function App() {
         ));
       } else if (payload.action === 'RECORD_GAME_SCORES') {
         if (activeSessionRef.current) {
-          saveGameScoresToDb(activeSessionRef.current.id, payload.gameTitle, payload.scoreUpdates);
+          await saveGameScoresToDb(activeSessionRef.current.id, payload.gameTitle, payload.scoreUpdates);
+          const dbGameScores = await fetchGameScoresForSession(activeSessionRef.current.id);
+          setGameScores(dbGameScores || []);
         }
         setTeams(prevTeams => prevTeams.map(t => ({
           ...t,
@@ -448,6 +457,7 @@ function App() {
         if (activeSessionRef.current) {
           await deleteGameScoreInDb(activeSessionRef.current.id, payload.gameTitle);
           const dbGameScores = await fetchGameScoresForSession(activeSessionRef.current.id);
+          setGameScores(dbGameScores || []);
           const teamScoresMap = {};
           (dbGameScores || []).forEach(gs => {
             teamScoresMap[gs.team_id] = (teamScoresMap[gs.team_id] || 0) + (gs.points_awarded || 0);
@@ -462,6 +472,7 @@ function App() {
         if (activeSessionRef.current) {
           await updateGameScoreInDb(activeSessionRef.current.id, payload.oldGameTitle, payload.newGameTitle, payload.scoreUpdates);
           const dbGameScores = await fetchGameScoresForSession(activeSessionRef.current.id);
+          setGameScores(dbGameScores || []);
           const teamScoresMap = {};
           (dbGameScores || []).forEach(gs => {
             teamScoresMap[gs.team_id] = (teamScoresMap[gs.team_id] || 0) + (gs.points_awarded || 0);
@@ -506,7 +517,7 @@ function App() {
       <main className="animate-fade-in" style={{ animationDelay: '0.3s' }}>
         <Routes>
           <Route path="/" element={<TeamPicker teams={teams} sendJoinRequest={sendJoinRequest} />} />
-          <Route path="/dashboard" element={<Dashboard teams={teams} />} />
+          <Route path="/dashboard" element={<Dashboard teams={teams} gameScores={gameScores} activeSession={activeSession} />} />
           <Route path="/admin" element={<AdminPanel teams={teams} isHost={isHost} sendCommand={sendCommand} activeSession={activeSession} />} />
         </Routes>
       </main>

@@ -607,7 +607,53 @@ body::before {
   border: 1px solid rgba(231, 0, 18, 0.4);
 }
 
-/* Vertical Bar Chart Leaderboard - TV Optimization */
+/* Scrollbar Hiding Utility */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* Game Filter Tab Pills */
+.game-tab-pill {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: none !important;
+  box-shadow: none !important;
+  flex-shrink: 0;
+}
+
+.game-tab-pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.game-tab-pill.active {
+  background: var(--primary) !important;
+  color: white !important;
+  border-color: #ff4d5a !important;
+  box-shadow: 0 4px 14px rgba(231, 0, 18, 0.4) !important;
+}
+
+/* Vertical Bar Chart Leaderboard - TV & Mobile Optimization */
 .vertical-leaderboard-card {
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--glass-border);
@@ -621,16 +667,22 @@ body::before {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  height: 480px;
-  padding-top: 70px;
+  gap: 12px;
+  height: 510px;
+  padding-top: 50px;
   padding-bottom: 16px;
   overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.vertical-leaderboard-container::-webkit-scrollbar {
+  display: none;
 }
 
 .bar-column {
-  flex: 1;
-  min-width: 80px;
+  flex: 1 1 0px;
+  min-width: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -650,8 +702,10 @@ body::before {
 
 .bar-score-tag.leader {
   color: #ff4d5a;
-  font-size: 1.8rem;
-  text-shadow: 0 0 16px rgba(255, 77, 90, 0.8);
+  font-size: 2rem;
+  font-weight: 900;
+  text-shadow: 0 0 20px rgba(255, 77, 90, 0.9);
+  transform: translateY(-2px);
 }
 
 .bar-track {
@@ -694,16 +748,21 @@ body::before {
 
 .bar-team-name {
   font-weight: 800;
-  font-size: 1.15rem;
+  font-size: clamp(0.7rem, 1vw, 1.05rem);
+  line-height: 1.2;
   color: var(--text-muted);
   white-space: nowrap;
-  overflow: hidden;
   text-overflow: ellipsis;
+  overflow: hidden;
+  text-align: center;
+  max-width: 100%;
+  display: block;
+  padding: 0 2px;
 }
 
 .bar-team-name.leader {
   color: white;
-  font-size: 1.3rem;
+  font-size: clamp(0.75rem, 1.15vw, 1.2rem);
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
@@ -739,6 +798,67 @@ body::before {
     grid-template-columns: 1fr;
     gap: 16px;
   }
+
+  .vertical-leaderboard-card {
+    padding: 20px 12px;
+    border-radius: 18px;
+  }
+
+  .vertical-leaderboard-container {
+    height: 380px;
+    padding-top: 45px;
+    padding-bottom: 8px;
+    gap: 8px;
+  }
+
+  .bar-column {
+    min-width: 58px;
+    flex: 1 0 auto;
+  }
+
+  .bar-score-tag {
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+  }
+
+  .bar-score-tag.leader {
+    font-size: 1.05rem;
+  }
+
+  .bar-track {
+    max-width: 100%;
+    border-radius: 12px 12px 4px 4px;
+    padding: 3px;
+  }
+
+  .bar-fill {
+    border-radius: 8px 8px 3px 3px;
+    padding-top: 4px;
+  }
+
+  .bar-team-info {
+    margin-top: 8px;
+  }
+
+  .bar-team-name {
+    font-size: 0.72rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  .bar-team-name.leader {
+    font-size: 0.78rem;
+  }
+
+  .bar-rank-badge {
+    font-size: 0.75rem;
+    margin-top: 2px;
+  }
+
+  .bar-rank-badge.leader {
+    font-size: 0.85rem;
+  }
 }
 
 .team-card {
@@ -773,11 +893,11 @@ body::before {
 .team-card-title {
   margin: 0;
   color: var(--primary);
-  font-size: 1.5rem;
+  font-size: clamp(1.1rem, 2vw, 1.5rem);
   font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.2;
+  white-space: normal;
+  word-break: break-word;
   flex: 1;
 }
 
